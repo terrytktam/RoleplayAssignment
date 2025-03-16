@@ -34,11 +34,6 @@ constraint forall(person in PERSONS, scene in SCENES, role in ROLES) (
     sum(round in ROUNDS) (person in assignments[round, scene, role]) <= 1
 );
 
-% 4. One person should be assigned as a leader at most once in a day.
-constraint forall(person in PERSONS) (
-    sum(round in ROUNDS, scene in SCENES) (leaders[round, scene] == person) <= 1
-);
-
 % 5. The leader must be in the prosecution role.
 constraint forall(round in ROUNDS, scene in SCENES) (
     leaders[round, scene] in assignments[round, scene, 1]
