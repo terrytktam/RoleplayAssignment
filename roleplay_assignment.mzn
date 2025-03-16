@@ -11,7 +11,8 @@ set of int: ROLES = 1..roles;
 
 % Decision Variables
 array[ROUNDS, SCENES, ROLES] of var set of PERSONS: assignments;
-array[ROUNDS, SCENES] of var PERSONS: leaders;
+array[ROUNDS, SCENES] of var PERSONS: leaders =
+    array2d(ROUNDS, SCENES, [(round - 1) * s + scene | round in ROUNDS, scene in SCENES]);        % with symmetry breaking
 
 % Derived Variables
 array[ROUNDS, SCENES, ROLES] of var int: role_counts; % Number of persons in each role
@@ -52,11 +53,6 @@ constraint forall(round in ROUNDS, scene in SCENES, role in ROLES) (
 constraint forall(round in ROUNDS, scene in SCENES, role in ROLES) (
     role_counts[round, scene, role] >= floor(n / (s * roles)) /\
     role_counts[round, scene, role] <= ceil(n / (s * roles))
-);
-
-% Fix leaders for all rounds
-constraint forall(round in ROUNDS, scene in SCENES) (
-    leaders[round, scene] = (round - 1) * s + scene
 );
 
 % Solve and Output
