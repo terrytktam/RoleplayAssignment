@@ -14,10 +14,11 @@ set of int: ROLES = 1..roles;
 % Decision Variables
 array[ROUNDS, SCENES, ROLES] of var set of PERSONS: assignments;
 array[PERSONS, ROUNDS, SCENES, ROLES] of var 0..1: assignments_bin;
-array[ROUNDS, SCENES] of var PERSONS: leaders =
-    array2d(ROUNDS, SCENES, [(round - 1) * s + scene | round in ROUNDS, scene in SCENES]);        % with symmetry breaking
 
 % Derived Variables
+int: role_counts_min = floor(n / (s * roles));
+int: role_counts_max = ceil(n / (s * roles));
+array[ROUNDS, SCENES] of PERSONS: leaders = array2d(ROUNDS, SCENES, 1..(r*s));        % with symmetry breaking
 array[ROUNDS, SCENES, ROLES] of var int: role_counts; % Number of persons in each role
 
 % Constraints
@@ -52,7 +53,7 @@ constraint forall(round in ROUNDS, scene in SCENES, role in ROLES) (
     let {
         array[PERSONS] of var int: temp = [assignments_bin[person, round, scene, role] | person in PERSONS]
     } in 
-    global_cardinality(temp, [1], [floor(n / (s * roles))], [ceil(n / (s * roles))])
+    global_cardinality(temp, [1], [role_counts_min], [role_counts_max])
 );
 
 % Solve and Output
