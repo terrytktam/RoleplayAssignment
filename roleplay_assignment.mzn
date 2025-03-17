@@ -33,6 +33,15 @@ constraint forall(person in PERSONS, round in ROUNDS) (
     count([assignments_bin[person, round, scene, role] | scene in SCENES, role in ROLES], 1, 1)
 );
 
+constraint redundant_constraint(
+    forall(round in ROUNDS) (
+        partition_set(
+            [assignments[round, scene, role] | scene in SCENES, role in ROLES],
+            PERSONS
+        )
+    )
+);
+
 % 2. Each person must appear in each scene at least once in a day.
 constraint forall(person in PERSONS, scene in SCENES) (
     count_leq([assignments_bin[person, round, scene, role] | round in ROUNDS, role in ROLES], 1, 1)
