@@ -71,6 +71,21 @@ constraint forall(round in ROUNDS) (
     global_cardinality(col(person_assignments, round), set2array(ASSIGNMENTS), assignment_counts_min, assignment_counts_max)
 );
 
+% 7. Prioritize assigning extra persons to public role first, then observer, then prosecution.
+constraint forall(round in ROUNDS) (
+    forall(scene in SCENES) (
+        let {
+            int: prosecution_index = (scene - 1) * roles + 1,
+            int: observer_index = (scene - 1) * roles + 2,
+            int: public_index = (scene - 1) * roles + 3,
+            var int: prosecution_count = card(assignments[round, prosecution_index]),
+            var int: observer_count = card(assignments[round, observer_index]),
+            var int: public_count = card(assignments[round, public_index])
+        } in
+        public_count >= observer_count /\ observer_count >= prosecution_count
+    )
+);
+
 % Solve and Output
 solve satisfy;
 
