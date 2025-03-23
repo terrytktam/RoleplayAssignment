@@ -26,6 +26,8 @@ array[PERSONS, ROUNDS] of var ASSIGNMENTS: person_assignments; % 2D array of ass
 % Helper Functions
 function var int: get_role(var int: index) = (index - 1) div s + 1;
 function var int: get_scene(var int: index) = (index - 1) mod s + 1;
+function bool: is_male(int: person) = person mod 2 == 1; % Odd-numbered participants are male
+function bool: is_female(int: person) = person mod 2 == 0; % Even-numbered participants are female
 
 % Constraints
 
@@ -84,6 +86,16 @@ constraint forall(round in ROUNDS) (
         } in
         public_count >= observer_count /\ observer_count >= prosecution_count
     )
+);
+
+% 8. Ensure even gender distribution in each (scene, role) pair.
+constraint forall(round in ROUNDS, index in ASSIGNMENTS) (
+    let {
+        var set of PERSONS: assigned_persons = assignments[round, index],
+        var int: male_count = sum([is_male(person) | person in assigned_persons]),
+        var int: female_count = sum([is_female(person) | person in assigned_persons])
+    } in
+    abs(male_count - female_count) <= 1
 );
 
 % Solve and Output
