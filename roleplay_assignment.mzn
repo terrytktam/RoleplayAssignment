@@ -1,5 +1,9 @@
 include "globals.mzn";
 
+% Constants
+int: FEMALE = 0;
+int: MALE = 1;
+
 % Parameters
 int: n; % Number of persons
 int: r; % Number of rounds
@@ -8,9 +12,10 @@ int: roles = 3; % Number of roles per scene (Prosecution, Observer, Public)
 
 set of int: PERSONS = 1..n;
 set of int: ROUNDS = 1..r;
-set of int: SCENES = 1..s;
-set of int: ROLES = 1..roles;
-set of int: ASSIGNMENTS = 1..(s * roles);
+set of int: SCENES = 0..(s - 1); % 0-indexing to make div easy
+set of int: ROLES = 0..(roles - 1); % 0-indexing to make mod easy
+set of int: ASSIGNMENTS = 1..(s * roles); % 1-indexing to let int_set_channel work
+set of int: GENDERS = FEMALE..MALE;
 
 % Decision Variables
 array[ROUNDS, ASSIGNMENTS] of var set of PERSONS: assignments; % 2D array of set
@@ -24,10 +29,8 @@ array[ROUNDS, SCENES] of PERSONS: leaders = array2d(ROUNDS, SCENES, 1..(r * s));
 array[PERSONS, ROUNDS] of var ASSIGNMENTS: person_assignments; % 2D array of assignment index
 
 % Helper Functions
-function var int: get_role(var int: index) = (index - 1) div s + 1;
-function var int: get_scene(var int: index) = (index - 1) mod s + 1;
-function bool: is_male(int: person) = person mod 2 == 1; % Odd-numbered participants are male
-function bool: is_female(int: person) = person mod 2 == 0; % Even-numbered participants are female
+function bool: is_male(int: person) = person mod 2 == MALE; % Odd-numbered participants are male
+function bool: is_female(int: person) = person mod 2 == FEMALE; % Even-numbered participants are female
 
 % Constraints
 
@@ -45,18 +48,18 @@ constraint forall(round in ROUNDS) (
 );
 
 % 2. Each person must appear in each scene at least once in a day.
-constraint forall(person in PERSONS, scene in SCENES) (
-    exists(round in ROUNDS) (
-        get_scene(person_assignments[person, round]) == scene
-    )
-);
+%constraint forall(person in PERSONS, scene in SCENES) (
+%    exists(round in ROUNDS) (
+%        (person_assignments[person, round] - 1) div roles == scene
+%    )
+%);
 
 % 3. Each person must appear in each role at least once in a day.
-constraint forall(person in PERSONS, role in ROLES) (
-    exists(round in ROUNDS) (
-        get_role(person_assignments[person, round]) == role
-    )
-);
+%constraint forall(person in PERSONS, role in ROLES) (
+%    exists(round in ROUNDS) (
+%        (person_assignments[person, round] - 1) mod roles == role
+%    )
+%);
 
 % 4. Each person must be assigned to each (scene, role) at most once in a day.
 constraint forall(person in PERSONS) (
@@ -65,7 +68,7 @@ constraint forall(person in PERSONS) (
 
 % 5. The leader must be in the prosecution role.
 constraint forall(round in ROUNDS, scene in SCENES) (
-    leaders[round, scene] in assignments[round, (scene - 1) * roles + 1]
+    leaders[round, scene] in assignments[round, scene * roles + 1]
 );
 
 % 6. The number of persons assigned to each scene/role should be evenly distributed.
@@ -77,9 +80,9 @@ constraint forall(round in ROUNDS) (
 constraint forall(round in ROUNDS) (
     forall(scene in SCENES) (
         let {
-            int: prosecution_index = (scene - 1) * roles + 1,
-            int: observer_index = (scene - 1) * roles + 2,
-            int: public_index = (scene - 1) * roles + 3,
+            int: prosecution_index = scene * roles + 1,
+            int: observer_index = scene * roles + 2,
+            int: public_index = scene * roles + 3,
             var int: prosecution_count = card(assignments[round, prosecution_index]),
             var int: observer_count = card(assignments[round, observer_index]),
             var int: public_count = card(assignments[round, public_index])
@@ -108,10 +111,10 @@ function string: format_role(set of PERSONS: people, var PERSONS: leader, bool: 
 output [
     "Round, Scene, Prosecution, Observer, Public\n" ++
     join("\n", [
-        "R" ++ show(round) ++ ", S" ++ show(scene) ++ ", " ++
-        format_role(fix(assignments[round, (scene - 1) * roles + 1]), fix(leaders[round, scene]), true) ++ ", " ++
-        format_role(fix(assignments[round, (scene - 1) * roles + 2]), 1, false) ++ ", " ++
-        format_role(fix(assignments[round, (scene - 1) * roles + 3]), 1, false)
+        "R" ++ show(round) ++ ", S" ++ show(scene + 1) ++ ", " ++
+        format_role(fix(assignments[round, scene * roles + 1]), fix(leaders[round, scene]), true) ++ ", " ++
+        format_role(fix(assignments[round, scene * roles + 2]), 1, false) ++ ", " ++
+        format_role(fix(assignments[round, scene * roles + 3]), 1, false)
         | round in ROUNDS, scene in SCENES
     ])
 ];
