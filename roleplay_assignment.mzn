@@ -11,6 +11,7 @@ int: s = 4; % Number of scenes per round
 int: roles = 3; % Number of roles per scene (Prosecution, Observer, Public)
 
 set of int: PERSONS = 1..n;
+set of int: PERSONS_0 = 0..n; % only used for printing
 set of int: ROUNDS = 1..r;
 set of int: SCENES = 0..(s - 1); % 0-indexing to make div easy
 set of int: ROLES = 0..(roles - 1); % 0-indexing to make mod easy
@@ -105,16 +106,16 @@ constraint forall(round in ROUNDS, index in ASSIGNMENTS) (
 solve satisfy;
 
 % Helper function to format a set of persons with optional leader marking
-function string: format_role(set of PERSONS: people, var PERSONS: leader, bool: is_prosecution) =
-    "[" ++ join(", ", [show(person) ++ if is_prosecution /\ fix(person) == fix(leader) then "*" else "" endif | person in people]) ++ "]";
+function string: format_role(set of PERSONS: people, PERSONS_0: leader) =
+    "[" ++ join(", ", [show(person) ++ if fix(person) == leader then "*" else "" endif | person in people]) ++ "]";
 
 output [
     "Round, Scene, Prosecution, Observer, Public\n" ++
     join("\n", [
         "R" ++ show(round) ++ ", S" ++ show(scene + 1) ++ ", " ++
-        format_role(fix(assignments[round, scene * roles + 1]), fix(leaders[round, scene]), true) ++ ", " ++
-        format_role(fix(assignments[round, scene * roles + 2]), 1, false) ++ ", " ++
-        format_role(fix(assignments[round, scene * roles + 3]), 1, false)
+        format_role(fix(assignments[round, scene * roles + 1]), fix(leaders[round, scene])) ++ ", " ++
+        format_role(fix(assignments[round, scene * roles + 2]), 0) ++ ", " ++
+        format_role(fix(assignments[round, scene * roles + 3]), 0)
         | round in ROUNDS, scene in SCENES
     ])
 ];
