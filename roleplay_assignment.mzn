@@ -17,6 +17,7 @@ set of int: SCENES = 0..(s - 1); % 0-indexing to make div easy
 set of int: ROLES = 0..(roles - 1); % 0-indexing to make mod easy
 set of int: ASSIGNMENTS = 1..(s * roles); % 1-indexing to let int_set_channel work
 set of int: GENDERS = FEMALE..MALE;
+set of int: ALL_ASSIGNMENTS = 1..(r * s * roles);
 
 % Decision Variables
 array[ROUNDS, ASSIGNMENTS] of var set of PERSONS: assignments; % 2D array of set
@@ -100,6 +101,16 @@ constraint forall(round in ROUNDS, index in ASSIGNMENTS) (
         var int: female_count = sum([is_female(person) | person in assigned_persons])
     } in
     abs(male_count - female_count) <= 1
+);
+
+% 9. Ensure same group of persons not appeared in another group
+constraint (
+    let {
+        array[int] of var set of int: temp = [assignments[round, index] | round in ROUNDS, index in ASSIGNMENTS]
+    } in 
+    not exists (i in ALL_ASSIGNMENTS, j in ALL_ASSIGNMENTS where i != j) (
+        temp[i] subset temp[j]
+    )
 );
 
 % Solve and Output
