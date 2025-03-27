@@ -106,7 +106,7 @@ constraint forall(round in ROUNDS, index in ASSIGNMENTS) (
 % 9. Ensure same group of persons not appeared in another group
 constraint (
     let {
-        array[int] of var set of int: temp = [assignments[round, index] | round in ROUNDS, index in ASSIGNMENTS]
+        array[ALL_ASSIGNMENTS] of var set of PERSONS: temp = array1d(ALL_ASSIGNMENTS, assignments)
     } in 
     not exists (i in ALL_ASSIGNMENTS, j in ALL_ASSIGNMENTS where i != j) (
         temp[i] subset temp[j]
