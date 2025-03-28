@@ -15,6 +15,8 @@ set of int: PERSONS_0 = 0..n; % only used for printing
 set of int: ROUNDS = 1..r;
 set of int: SCENES = 0..(s - 1); % 0-indexing to make div easy
 set of int: ROLES = 0..(roles - 1); % 0-indexing to make mod easy
+set of int: SCENES_1 = 1..s;
+set of int: ROLES_1 = 1..roles;
 set of int: ASSIGNMENTS = 1..(s * roles); % 1-indexing to let int_set_channel work
 set of int: GENDERS = FEMALE..MALE;
 set of int: ALL_ASSIGNMENTS = 1..(r * s * roles);
@@ -80,16 +82,10 @@ constraint forall(round in ROUNDS) (
 
 % 7. Prioritize assigning extra persons to public role first, then observer, then prosecution.
 constraint forall(round in ROUNDS) (
-    forall(scene in SCENES) (
-        let {
-            int: prosecution_index = scene * roles + 1,
-            int: observer_index = scene * roles + 2,
-            int: public_index = scene * roles + 3,
-            var int: prosecution_count = card(assignments[round, prosecution_index]),
-            var int: observer_count = card(assignments[round, observer_index]),
-            var int: public_count = card(assignments[round, public_index])
-        } in
-        public_count >= observer_count /\ observer_count >= prosecution_count
+    let {
+        array[SCENES_1, ROLES_1] of var int: counts = array2d(SCENES_1, ROLES_1, [card(assignments[round, index]) | index in ASSIGNMENTS])
+    } in forall(scene in SCENES_1) (
+        increasing(row(counts, scene))
     )
 );
 
