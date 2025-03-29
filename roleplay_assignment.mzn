@@ -5,8 +5,8 @@ int: FEMALE = 0;
 int: MALE = 1;
 
 % Parameters
-int: n; % Number of persons
-int: r; % Number of rounds
+int: n; % Number of persons (assumed n >= r * s)
+int: r; % Number of rounds (assumed r <= s * roles)
 int: s = 4; % Number of scenes per round
 int: roles = 3; % Number of roles per scene (Prosecution, Observer, Public)
 
@@ -25,6 +25,7 @@ set of int: ALL_ASSIGNMENTS = 1..(r * s * roles);
 array[ROUNDS, ASSIGNMENTS] of var set of PERSONS: assignments; % 2D array of set
 
 % Derived Parameters
+int: group_size_min = floor(n / (r * s));
 array[ASSIGNMENTS] of int: assignment_counts_min = [floor(n / (s * roles)) | _ in ASSIGNMENTS];
 array[ASSIGNMENTS] of int: assignment_counts_max = [ceil(n / (s * roles)) | _ in ASSIGNMENTS];
 array[ROUNDS, SCENES] of PERSONS: leaders = array2d(ROUNDS, SCENES, 1..(r * s));        % with symmetry breaking
@@ -45,13 +46,9 @@ constraint forall(round in ROUNDS) (
 
 % 1. Each person must be assigned to only one (scene, role) in each round.
 constraint forall(round in ROUNDS) (
-    partition_set(
-        row(assignments, round),
-        PERSONS
-    )
+    partition_set(row(assignments, round), PERSONS)
 );
 
-% 2. Each person must appear in each scene at least once in a day.
 %constraint forall(person in PERSONS, scene in SCENES) (
 %    exists(round in ROUNDS) (
 %        (person_assignments[person, round] - 1) div roles == scene
@@ -77,14 +74,17 @@ constraint forall(round in ROUNDS, scene in SCENES) (
 
 % 6. The number of persons assigned to each scene/role should be evenly distributed.
 constraint forall(round in ROUNDS) (
-    global_cardinality(col(person_assignments, round), set2array(ASSIGNMENTS), assignment_counts_min, assignment_counts_max)
+    global_cardinality(col(person_assignments, round), set2array(ASSIGNMENTS), 
+                       assignment_counts_min, assignment_counts_max)
 );
 
 % 7. Prioritize assigning extra persons to public role first, then observer, then prosecution.
 constraint forall(round in ROUNDS) (
     let {
-        array[SCENES_1, ROLES_1] of var int: counts = array2d(SCENES_1, ROLES_1, [card(assignments[round, index]) | index in ASSIGNMENTS])
-    } in forall(scene in SCENES_1) (
+        array[SCENES_1, ROLES_1] of var int: counts = array2d(SCENES_1, ROLES_1, 
+                        [card(assignments[round, index]) | index in ASSIGNMENTS])
+    } in 
+    forall(scene in SCENES_1) (
         increasing(row(counts, scene))
     )
 );
@@ -105,7 +105,7 @@ constraint (
         array[ALL_ASSIGNMENTS] of var set of PERSONS: temp = array1d(ALL_ASSIGNMENTS, assignments)
     } in 
     not exists (i in ALL_ASSIGNMENTS, j in ALL_ASSIGNMENTS where i != j) (
-        temp[i] subset temp[j]
+        card(temp[i]) > group_size_min /\ temp[i] subset temp[j]
     )
 );
 
