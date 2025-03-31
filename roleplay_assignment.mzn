@@ -100,16 +100,16 @@ constraint forall(round in ROUNDS, index in ASSIGNMENTS) (
     abs(male_count - female_count) <= 1
 );
 
-% 9. Ensure same group of persons not appeared in another group
-constraint (
-    let {
-        array[ALL_ASSIGNMENTS] of var set of PERSONS: temp = array1d(ALL_ASSIGNMENTS, assignments)
-    } in 
-    not exists (i in ALL_ASSIGNMENTS, j in ALL_ASSIGNMENTS where i != j /\ 
-        card(temp[i]) > group_size_min /\ card(temp[j]) > group_size_min) (
-         temp[i] subset temp[j]
-    )
-);
+% 9. Ensure same group of persons not appeared in another group (nice to have)
+%constraint (
+%    let {
+%        array[ALL_ASSIGNMENTS] of var set of PERSONS: temp = array1d(ALL_ASSIGNMENTS, assignments)
+%    } in 
+%    not exists (i in ALL_ASSIGNMENTS, j in ALL_ASSIGNMENTS where i != j /\ 
+%        card(temp[i]) > group_size_min /\ card(temp[j]) > group_size_min) (
+%         temp[i] subset temp[j]
+%    )
+%);
 
 % Solve and Output
 solve satisfy;
@@ -128,3 +128,5 @@ output [
         | round in ROUNDS, scene in SCENES
     ])
 ];
+
+output("\n" ++ show2d(fix(person_assignments)));
