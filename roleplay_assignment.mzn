@@ -25,7 +25,7 @@ set of int: ALL_ASSIGNMENTS = 1..(r * s * roles);
 array[ROUNDS, ASSIGNMENTS] of var set of PERSONS: assignments; % 2D array of set
 
 % Derived Parameters
-int: group_size_min = floor(n / (r * s));
+int: group_size_min = floor((n - 1) / (r * s));
 array[ASSIGNMENTS] of int: assignment_counts_min = [floor(n / (s * roles)) | _ in ASSIGNMENTS];
 array[ASSIGNMENTS] of int: assignment_counts_max = [ceil(n / (s * roles)) | _ in ASSIGNMENTS];
 array[ROUNDS, SCENES] of PERSONS: leaders = array2d(ROUNDS, SCENES, 1..(r * s));        % with symmetry breaking
@@ -49,6 +49,7 @@ constraint forall(round in ROUNDS) (
     partition_set(row(assignments, round), PERSONS)
 );
 
+% 2. Each person must appear in each scene at least once in a day.
 %constraint forall(person in PERSONS, scene in SCENES) (
 %    exists(round in ROUNDS) (
 %        (person_assignments[person, round] - 1) div roles == scene
@@ -104,8 +105,9 @@ constraint (
     let {
         array[ALL_ASSIGNMENTS] of var set of PERSONS: temp = array1d(ALL_ASSIGNMENTS, assignments)
     } in 
-    not exists (i in ALL_ASSIGNMENTS, j in ALL_ASSIGNMENTS where i != j) (
-        card(temp[i]) > group_size_min /\ temp[i] subset temp[j]
+    not exists (i in ALL_ASSIGNMENTS, j in ALL_ASSIGNMENTS where i != j /\ 
+        card(temp[i]) > group_size_min /\ card(temp[j]) > group_size_min) (
+         temp[i] subset temp[j]
     )
 );
 
