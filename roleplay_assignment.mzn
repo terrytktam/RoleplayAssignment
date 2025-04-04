@@ -29,6 +29,7 @@ int: group_size_min = floor((n - 1) / (r * s));
 array[ASSIGNMENTS] of int: assignment_counts_min = [floor(n / (s * roles)) | _ in ASSIGNMENTS];
 array[ASSIGNMENTS] of int: assignment_counts_max = [ceil(n / (s * roles)) | _ in ASSIGNMENTS];
 array[ROUNDS, SCENES] of PERSONS: leaders = array2d(ROUNDS, SCENES, 1..(r * s));        % with symmetry breaking
+set of PERSONS: non_leaders = PERSONS diff 1..(r * s);
 
 % Channeling Variables
 array[PERSONS, ROUNDS] of var ASSIGNMENTS: person_assignments; % 2D array of assignment index
@@ -109,6 +110,15 @@ constraint (
         card(temp[i]) > group_size_min /\ card(temp[j]) > group_size_min) (
          temp[i] subset temp[j]
     )
+);
+
+% 10. Assign same-gender non-leaders in ascending order for the first round
+constraint symmetry_breaking_constraint(
+    let {
+        array[PERSONS] of var ASSIGNMENTS: round1_assignments = col(person_assignments, 1)
+    } in
+    increasing([round1_assignments[person] | person in non_leaders where is_male(person)]) /\
+    increasing([round1_assignments[person] | person in non_leaders where is_female(person)])
 );
 
 % Solve and Output
