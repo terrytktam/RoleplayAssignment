@@ -133,7 +133,7 @@ function string: format_role(set of PERSONS: people, PERSONS_0: leader) =
 output [
     "Round, Scene, Prosecution, Observer, Public\n" ++
     join("\n", [
-        "R" ++ show(round) ++ ", S" ++ show(scene) ++ ", " ++
+        "R" ++ show(round) ++ ", " ++ show(scene) ++ ", " ++
         format_role(fix(assignments[round, arg_val(allAssignments, (scene, Prosecution))]), fix(leaders[round, enum2int(scene)])) ++ ", " ++
         format_role(fix(assignments[round, arg_val(allAssignments, (scene, Observer))]), 0) ++ ", " ++
         format_role(fix(assignments[round, arg_val(allAssignments, (scene, Public))]), 0)
