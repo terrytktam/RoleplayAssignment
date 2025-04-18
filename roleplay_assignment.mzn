@@ -7,17 +7,19 @@ int: MALE = 1;
 % Parameters
 int: n; % Number of persons (assumed n >= r * s)
 int: r; % Number of rounds (assumed r <= s * roles)
-int: s = 4; % Number of scenes per round
-int: roles = 3; % Number of roles per scene (Prosecution, Observer, Public)
+enum Scenes = {S1, S2, S3, S4};
+enum Roles = {Prosecution, Observer, Public};
+type Assignment = tuple(Scenes, Roles);
+int: s = card(Scenes); % Number of scenes per round
+int: roles = card(Roles); % Number of roles per scene
 
+set of int: SCENES = enum2int(Scenes);
+set of int: ROLES = enum2int(Roles);
+array[int] of Assignment: allAssignments = [ (scene, role) | scene in Scenes, role in Roles ];
 set of int: PERSONS = 1..n;
 set of int: PERSONS_0 = 0..n; % only used for printing
 set of int: ROUNDS = 1..r;
-set of int: SCENES = 0..(s - 1); % 0-indexing to make div easy
-set of int: ROLES = 0..(roles - 1); % 0-indexing to make mod easy
-set of int: SCENES_1 = 1..s;
-set of int: ROLES_1 = 1..roles;
-set of int: ASSIGNMENTS = 1..(s * roles); % 1-indexing to let int_set_channel work
+set of int: ASSIGNMENTS = 1..length(allAssignments);
 set of int: GENDERS = FEMALE..MALE;
 set of int: ALL_ASSIGNMENTS = 1..(r * s * roles);
 
@@ -71,7 +73,7 @@ constraint forall(person in PERSONS) (
 
 % 5. The leader must be in the prosecution role.
 constraint forall(round in ROUNDS, scene in SCENES) (
-    leaders[round, scene] in assignments[round, scene * roles + 1]
+    leaders[round, scene] in assignments[round, arg_val(allAssignments, (to_enum(Scenes, scene), Prosecution))]
 );
 
 % 6. The number of persons assigned to each scene/role should be evenly distributed.
@@ -83,10 +85,10 @@ constraint forall(round in ROUNDS) (
 % 7. Prioritize assigning extra persons to public role first, then observer, then prosecution.
 constraint forall(round in ROUNDS) (
     let {
-        array[SCENES_1, ROLES_1] of var int: counts = array2d(SCENES_1, ROLES_1, 
+        array[SCENES, ROLES] of var int: counts = array2d(SCENES, ROLES, 
                         [card(assignments[round, index]) | index in ASSIGNMENTS])
     } in 
-    forall(scene in SCENES_1) (
+    forall(scene in SCENES) (
         increasing(row(counts, scene))
     )
 );
@@ -131,10 +133,10 @@ function string: format_role(set of PERSONS: people, PERSONS_0: leader) =
 output [
     "Round, Scene, Prosecution, Observer, Public\n" ++
     join("\n", [
-        "R" ++ show(round) ++ ", S" ++ show(scene + 1) ++ ", " ++
-        format_role(fix(assignments[round, scene * roles + 1]), fix(leaders[round, scene])) ++ ", " ++
-        format_role(fix(assignments[round, scene * roles + 2]), 0) ++ ", " ++
-        format_role(fix(assignments[round, scene * roles + 3]), 0)
-        | round in ROUNDS, scene in SCENES
+        "R" ++ show(round) ++ ", S" ++ show(scene) ++ ", " ++
+        format_role(fix(assignments[round, arg_val(allAssignments, (scene, Prosecution))]), fix(leaders[round, enum2int(scene)])) ++ ", " ++
+        format_role(fix(assignments[round, arg_val(allAssignments, (scene, Observer))]), 0) ++ ", " ++
+        format_role(fix(assignments[round, arg_val(allAssignments, (scene, Public))]), 0)
+        | round in ROUNDS, scene in Scenes
     ])
 ];
