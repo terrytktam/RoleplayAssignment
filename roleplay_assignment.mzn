@@ -28,6 +28,8 @@ array[ROUNDS, ASSIGNMENTS] of var set of PERSONS: assignments; % 2D array of set
 
 % Derived Parameters
 int: group_size_min = floor((n - 1) / (r * s));
+array[SCENES] of int: scene_counts_min = [floor(r / s) | _ in SCENES];
+array[ROLES] of int: role_counts_min = [floor(r / roles) | _ in ROLES];
 array[ASSIGNMENTS] of int: assignment_counts_min = [floor(n / (s * roles)) | _ in ASSIGNMENTS];
 array[ASSIGNMENTS] of int: assignment_counts_max = [ceil(n / (s * roles)) | _ in ASSIGNMENTS];
 array[ROUNDS, SCENES] of PERSONS: leaders = array2d(ROUNDS, SCENES, 1..(r * s));        % with symmetry breaking
@@ -52,19 +54,15 @@ constraint forall(round in ROUNDS) (
     partition_set(row(assignments, round), PERSONS)
 );
 
-% 2. Each person must appear in each scene at least once in a day.
-%constraint forall(person in PERSONS, scene in SCENES) (
-%    exists(round in ROUNDS) (
-%        (person_assignments[person, round] - 1) div roles == scene
-%    )
-%);
-
-% 3. Each person must appear in each role at least once in a day.
-%constraint forall(person in PERSONS, role in ROLES) (
-%    exists(round in ROUNDS) (
-%        (person_assignments[person, round] - 1) mod roles == role
-%    )
-%);
+% 2. Each person must appear in each scene/role at least once in a day.
+constraint forall(person in PERSONS) (
+    let {
+        array[SCENES, ROLES] of var 0..1: temp = array2d(SCENES, ROLES, 
+            global_cardinality(row(person_assignments, person), ASSIGNMENTS))
+    } in
+    [count(row(temp, scene), 1) | scene in SCENES] >= scene_counts_min /\ 
+    [count(col(temp, role), 1) | role in ROLES] >= role_counts_min 
+);
 
 % 4. Each person must be assigned to each (scene, role) at most once in a day.
 constraint forall(person in PERSONS) (
@@ -93,16 +91,6 @@ constraint forall(round in ROUNDS) (
     )
 );
 
-% 8. Ensure even gender distribution in each (scene, role) pair.
-constraint forall(round in ROUNDS, index in ASSIGNMENTS) (
-    let {
-        var set of PERSONS: assigned_persons = assignments[round, index],
-        var int: male_count = sum([is_male(person) | person in assigned_persons]),
-        var int: female_count = sum([is_female(person) | person in assigned_persons])
-    } in
-    abs(male_count - female_count) <= 1
-);
-
 % 9. Ensure same group of persons not appeared in another group (nice to have)
 %constraint (
 %    let {
@@ -123,8 +111,20 @@ constraint symmetry_breaking_constraint(
     increasing([round1_assignments[person] | person in non_leaders where is_female(person)])
 );
 
+var int: gender_imbalance = 
+    sum(round in ROUNDS, index in ASSIGNMENTS) (
+        let {
+            var set of PERSONS: assigned_persons = assignments[round, index],
+            var int: male_count = sum([is_male(person) | person in assigned_persons]),
+            var int: female_count = sum([is_female(person) | person in assigned_persons]),
+            var int: diff_count = abs(male_count - female_count),
+            var int: total_count = male_count + female_count
+        } in
+        (diff_count > 1 \/ total_count mod 2 == 0) * diff_count
+    );
+
 % Solve and Output
-solve satisfy;
+solve minimize gender_imbalance;
 
 % Helper function to format a set of persons with optional leader marking
 function string: format_role(set of PERSONS: people, PERSONS_0: leader) =
@@ -138,5 +138,5 @@ output [
         format_role(fix(assignments[round, arg_val(allAssignments, (scene, Observer))]), 0) ++ ", " ++
         format_role(fix(assignments[round, arg_val(allAssignments, (scene, Public))]), 0)
         | round in ROUNDS, scene in Scenes
-    ])
+    ]) ++ "\nGender imbalance: " ++ show(gender_imbalance)
 ];
