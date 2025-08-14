@@ -7,28 +7,51 @@ int: MALE = 1;
 % Parameters
 int: n; % Number of persons (assumed n >= r * s)
 int: r; % Number of rounds (assumed r <= s * roles)
-int: s = 4; % Number of scenes per round
-int: roles = 3; % Number of roles per scene (Prosecution, Observer, Public)
+enum Scenes = {S1, S2, S3, S4};
+enum Roles = {Prosecution, Observer, Public};
+enum Rules = {UniqueAssignment,
+              EvenSceneRoleAssignment,
+              NoDuplicateAssignment,
+              LeaderInProsecutionRole,
+              EvenGroupCount,
+              ExtraPersonRolePriority,
+              NonLeaderFirstRoundOrdering};
+type Assignment = tuple(Scenes, Roles);
+int: s = card(Scenes); % Number of scenes per round
+int: roles = card(Roles); % Number of roles per scene
 
+set of int: SCENES = enum2int(Scenes);
+set of int: ROLES = enum2int(Roles);
+array[int] of Assignment: allAssignments = [ (scene, role) | scene in Scenes, role in Roles ];
 set of int: PERSONS = 1..n;
 set of int: PERSONS_0 = 0..n; % only used for printing
 set of int: ROUNDS = 1..r;
-set of int: SCENES = 0..(s - 1); % 0-indexing to make div easy
-set of int: ROLES = 0..(roles - 1); % 0-indexing to make mod easy
-set of int: SCENES_1 = 1..s;
-set of int: ROLES_1 = 1..roles;
-set of int: ASSIGNMENTS = 1..(s * roles); % 1-indexing to let int_set_channel work
+set of int: ASSIGNMENTS = 1..length(allAssignments);
 set of int: GENDERS = FEMALE..MALE;
 set of int: ALL_ASSIGNMENTS = 1..(r * s * roles);
+
+% Rule feature toggles
+array[Rules] of bool: active_constraints = [
+  true, % UniqueAssignment (mandatory)
+  true, % EvenSceneRoleAssignment (mandatory)
+  true, % NoDuplicateAssignment (mandatory)
+  true, % LeaderInProsecutionRole (mandatory)
+  true, % EvenGroupCount (mandatory)
+  true, % ExtraPersonRolePriority
+  true, % NonLeaderFirstRoundOrdering
+];
 
 % Decision Variables
 array[ROUNDS, ASSIGNMENTS] of var set of PERSONS: assignments; % 2D array of set
 
 % Derived Parameters
 int: group_size_min = floor((n - 1) / (r * s));
+array[SCENES] of int: scene_counts_min = [floor(r / s) | _ in SCENES];
+array[ROLES] of int: role_counts_min = [floor(r / roles) | _ in ROLES];
 array[ASSIGNMENTS] of int: assignment_counts_min = [floor(n / (s * roles)) | _ in ASSIGNMENTS];
 array[ASSIGNMENTS] of int: assignment_counts_max = [ceil(n / (s * roles)) | _ in ASSIGNMENTS];
-array[ROUNDS, SCENES] of PERSONS: leaders = array2d(ROUNDS, SCENES, 1..(r * s));        % with symmetry breaking
+array[ROUNDS, SCENES] of PERSONS: leaders = array2d(ROUNDS, SCENES, 1..(r * s)); % with symmetry breaking
+set of PERSONS: non_leaders = PERSONS diff 1..(r * s);
 
 % Channeling Variables
 array[PERSONS, ROUNDS] of var ASSIGNMENTS: person_assignments; % 2D array of assignment index
@@ -44,75 +67,85 @@ constraint forall(round in ROUNDS) (
     int_set_channel(col(person_assignments, round), row(assignments, round))
 );
 
+% Rule feature toggle constraints
+constraint active_constraints[UniqueAssignment] -> rules1();
+constraint active_constraints[EvenSceneRoleAssignment] -> rules2();
+constraint active_constraints[NoDuplicateAssignment] -> rules3();
+constraint active_constraints[LeaderInProsecutionRole] -> rules4();
+constraint active_constraints[EvenGroupCount] -> rules5();
+constraint active_constraints[ExtraPersonRolePriority] -> rules6();
+constraint active_constraints[NonLeaderFirstRoundOrdering] -> symmetry_breaking_constraint(rules7());
+
+% Predicates
+
 % 1. Each person must be assigned to only one (scene, role) in each round.
-constraint forall(round in ROUNDS) (
+predicate rules1 = (forall(round in ROUNDS) (
     partition_set(row(assignments, round), PERSONS)
-);
+));
 
-% 2. Each person must appear in each scene at least once in a day.
-%constraint forall(person in PERSONS, scene in SCENES) (
-%    exists(round in ROUNDS) (
-%        (person_assignments[person, round] - 1) div roles == scene
-%    )
-%);
-
-% 3. Each person must appear in each role at least once in a day.
-%constraint forall(person in PERSONS, role in ROLES) (
-%    exists(round in ROUNDS) (
-%        (person_assignments[person, round] - 1) mod roles == role
-%    )
-%);
-
-% 4. Each person must be assigned to each (scene, role) at most once in a day.
-constraint forall(person in PERSONS) (
-    alldifferent(row(person_assignments, person))
-);
-
-% 5. The leader must be in the prosecution role.
-constraint forall(round in ROUNDS, scene in SCENES) (
-    leaders[round, scene] in assignments[round, scene * roles + 1]
-);
-
-% 6. The number of persons assigned to each scene/role should be evenly distributed.
-constraint forall(round in ROUNDS) (
-    global_cardinality(col(person_assignments, round), set2array(ASSIGNMENTS), 
-                       assignment_counts_min, assignment_counts_max)
-);
-
-% 7. Prioritize assigning extra persons to public role first, then observer, then prosecution.
-constraint forall(round in ROUNDS) (
+% 2. Each person must be assigned to each scene/role evenly
+predicate rules2 = (forall(person in PERSONS) (
     let {
-        array[SCENES_1, ROLES_1] of var int: counts = array2d(SCENES_1, ROLES_1, 
+        array[SCENES, ROLES] of var 0..1: temp = array2d(SCENES, ROLES, 
+            global_cardinality(row(person_assignments, person), ASSIGNMENTS))
+    } in
+    [count(row(temp, scene), 1) | scene in SCENES] >= scene_counts_min /\ 
+    [count(col(temp, role), 1) | role in ROLES] >= role_counts_min 
+));
+
+% 3. Each person must be assigned to each (scene, role) at most once in a day.
+predicate rules3 = (forall(person in PERSONS) (
+    alldifferent(row(person_assignments, person))
+));
+
+% 4. The leader must be in the prosecution role.
+predicate rules4 = (forall(round in ROUNDS, scene in SCENES) (
+    leaders[round, scene] in assignments[round, arg_val(allAssignments, (to_enum(Scenes, scene), Prosecution))]
+));
+
+% 5. The number of persons assigned to each scene/role should be evenly distributed.
+predicate rules5 = (forall(round in ROUNDS) (
+    global_cardinality(col(person_assignments, round), ASSIGNMENTS, 
+                       assignment_counts_min, assignment_counts_max)
+));
+
+% 6. Prioritize assigning extra persons to public role first, then observer, then prosecution.
+predicate rules6 = (forall(round in ROUNDS) (
+    let {
+        array[SCENES, ROLES] of var int: counts = array2d(SCENES, ROLES, 
                         [card(assignments[round, index]) | index in ASSIGNMENTS])
     } in 
-    forall(scene in SCENES_1) (
+    forall(scene in SCENES) (
         increasing(row(counts, scene))
     )
-);
+));
 
-% 8. Ensure even gender distribution in each (scene, role) pair.
-constraint forall(round in ROUNDS, index in ASSIGNMENTS) (
+% 7. Assign same-gender non-leaders in ascending order for the first round
+predicate rules7 = (
     let {
-        var set of PERSONS: assigned_persons = assignments[round, index],
-        var int: male_count = sum([is_male(person) | person in assigned_persons]),
-        var int: female_count = sum([is_female(person) | person in assigned_persons])
+        array[PERSONS] of var ASSIGNMENTS: round1_assignments = col(person_assignments, 1)
     } in
-    abs(male_count - female_count) <= 1
+    increasing([round1_assignments[person] | person in non_leaders where is_male(person)]) /\
+    increasing([round1_assignments[person] | person in non_leaders where is_female(person)])
 );
 
-% 9. Ensure same group of persons not appeared in another group (nice to have)
-%constraint (
-%    let {
-%        array[ALL_ASSIGNMENTS] of var set of PERSONS: temp = array1d(ALL_ASSIGNMENTS, assignments)
-%    } in 
-%    not exists (i in ALL_ASSIGNMENTS, j in ALL_ASSIGNMENTS where i != j /\ 
-%        card(temp[i]) > group_size_min /\ card(temp[j]) > group_size_min) (
-%         temp[i] subset temp[j]
-%    )
-%);
+% Objective functions
+
+% Gender imbalance calculation (don't treat gender imbalance for odd-numbered group size)
+var int: gender_imbalance = 
+    sum(round in ROUNDS, index in ASSIGNMENTS) (
+        let {
+            var set of PERSONS: assigned_persons = assignments[round, index],
+            var int: male_count = sum([is_male(person) | person in assigned_persons]),
+            var int: female_count = sum([is_female(person) | person in assigned_persons]),
+            var int: diff_count = abs(male_count - female_count),
+            var int: total_count = male_count + female_count
+        } in
+        (diff_count > 1 \/ total_count mod 2 == 0) * diff_count
+    );
 
 % Solve and Output
-solve satisfy;
+solve minimize gender_imbalance;
 
 % Helper function to format a set of persons with optional leader marking
 function string: format_role(set of PERSONS: people, PERSONS_0: leader) =
@@ -121,12 +154,10 @@ function string: format_role(set of PERSONS: people, PERSONS_0: leader) =
 output [
     "Round, Scene, Prosecution, Observer, Public\n" ++
     join("\n", [
-        "R" ++ show(round) ++ ", S" ++ show(scene + 1) ++ ", " ++
-        format_role(fix(assignments[round, scene * roles + 1]), fix(leaders[round, scene])) ++ ", " ++
-        format_role(fix(assignments[round, scene * roles + 2]), 0) ++ ", " ++
-        format_role(fix(assignments[round, scene * roles + 3]), 0)
-        | round in ROUNDS, scene in SCENES
-    ])
+        "R" ++ show(round) ++ ", " ++ show(scene) ++ ", " ++
+        format_role(fix(assignments[round, arg_val(allAssignments, (scene, Prosecution))]), fix(leaders[round, enum2int(scene)])) ++ ", " ++
+        format_role(fix(assignments[round, arg_val(allAssignments, (scene, Observer))]), 0) ++ ", " ++
+        format_role(fix(assignments[round, arg_val(allAssignments, (scene, Public))]), 0)
+        | round in ROUNDS, scene in Scenes
+    ]) ++ "\nGender imbalance: " ++ show(gender_imbalance)
 ];
-
-output("\n" ++ show2d(fix(person_assignments)));
