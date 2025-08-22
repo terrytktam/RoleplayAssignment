@@ -15,7 +15,9 @@ enum Rules = {UniqueAssignment,
               LeaderInProsecutionRole,
               EvenGroupCount,
               ExtraPersonRolePriority,
-              NonLeaderFirstRoundOrdering};
+              NonLeaderFirstRoundOrdering,
+              MandatoryLeaderAssignment,
+              FirstRoundLeaderAssignment};
 type Assignment = tuple(Scenes, Roles);
 int: s = card(Scenes); % Number of scenes per round
 int: roles = card(Roles); % Number of roles per scene
@@ -34,23 +36,26 @@ set of int: ALL_ASSIGNMENTS = 1..(r * s * roles);
 array[Rules] of bool: active_constraints = [
   true, % UniqueAssignment (mandatory)
   true, % EvenSceneRoleAssignment (mandatory)
-  true, % NoDuplicateAssignment (mandatory)
+  suff_rounds, % NoDuplicateAssignment (conditionally mandatory)
   true, % LeaderInProsecutionRole (mandatory)
   true, % EvenGroupCount (mandatory)
   true, % ExtraPersonRolePriority
-  true, % NonLeaderFirstRoundOrdering
+  suff_rounds, % NonLeaderFirstRoundOrdering (conditionally mandatory)
+  not(suff_rounds), % MandatoryLeaderAssignment (conditionally mandatory)
+  true, % FirstRoundLeaderAssignment (mandatory)
 ];
 
 % Decision Variables
 array[ROUNDS, ASSIGNMENTS] of var set of PERSONS: assignments; % 2D array of set
+array[ROUNDS, SCENES] of var PERSONS: leaders; % with symmetry breaking
 
 % Derived Parameters
+bool: suff_rounds = n > r * s;
 int: group_size_min = floor((n - 1) / (r * s));
 array[SCENES] of int: scene_counts_min = [floor(r / s) | _ in SCENES];
 array[ROLES] of int: role_counts_min = [floor(r / roles) | _ in ROLES];
 array[ASSIGNMENTS] of int: assignment_counts_min = [floor(n / (s * roles)) | _ in ASSIGNMENTS];
 array[ASSIGNMENTS] of int: assignment_counts_max = [ceil(n / (s * roles)) | _ in ASSIGNMENTS];
-array[ROUNDS, SCENES] of PERSONS: leaders = array2d(ROUNDS, SCENES, 1..(r * s)); % with symmetry breaking
 set of PERSONS: non_leaders = PERSONS diff 1..(r * s);
 
 % Channeling Variables
@@ -75,6 +80,8 @@ constraint active_constraints[LeaderInProsecutionRole] -> rules4();
 constraint active_constraints[EvenGroupCount] -> rules5();
 constraint active_constraints[ExtraPersonRolePriority] -> rules6();
 constraint active_constraints[NonLeaderFirstRoundOrdering] -> symmetry_breaking_constraint(rules7());
+constraint active_constraints[MandatoryLeaderAssignment] -> rules8();
+constraint active_constraints[FirstRoundLeaderAssignment] -> symmetry_breaking_constraint(rules9());
 
 % Predicates
 
@@ -86,11 +93,11 @@ predicate rules1 = (forall(round in ROUNDS) (
 % 2. Each person must be assigned to each scene/role evenly
 predicate rules2 = (forall(person in PERSONS) (
     let {
-        array[SCENES, ROLES] of var 0..1: temp = array2d(SCENES, ROLES, 
+        array[SCENES, ROLES] of var 0..ceil(r/card(ASSIGNMENTS)): temp = array2d(SCENES, ROLES, 
             global_cardinality(row(person_assignments, person), ASSIGNMENTS))
     } in
-    [count(row(temp, scene), 1) | scene in SCENES] >= scene_counts_min /\ 
-    [count(col(temp, role), 1) | role in ROLES] >= role_counts_min 
+    [sum(row(temp, scene)) | scene in SCENES] >= scene_counts_min /\ 
+    [sum(col(temp, role)) | role in ROLES] >= role_counts_min 
 ));
 
 % 3. Each person must be assigned to each (scene, role) at most once in a day.
@@ -127,6 +134,22 @@ predicate rules7 = (
     } in
     increasing([round1_assignments[person] | person in non_leaders where is_male(person)]) /\
     increasing([round1_assignments[person] | person in non_leaders where is_female(person)])
+);
+
+% 8. All persons must be assigned to be leader at least once, and cannot assigned to the same scene
+predicate rules8 = (
+    min(global_cardinality(leaders,PERSONS)) > 0 /\
+    forall(scene in SCENES) (
+        alldifferent(col(leaders,scene))
+    )
+);
+
+% 9. Assign first-round leaders in ascending order
+predicate rules9 = (
+    if (suff_rounds) then
+        leaders = array2d(ROUNDS, SCENES, 1..(r*s))
+    else slice_1d(array1d(leaders), [1..n], 1..n) = 1..n
+    endif
 );
 
 % Objective functions
