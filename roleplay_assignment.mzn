@@ -53,7 +53,9 @@ array[ROUNDS, SCENES] of var PERSONS: leaders; % with symmetry breaking
 bool: suff_rounds = n > r * s;
 int: group_size_min = floor((n - 1) / (r * s));
 array[SCENES] of int: scene_counts_min = [floor(r / s) | _ in SCENES];
+array[SCENES] of int: scene_counts_max = [ceil(r / s) | _ in SCENES];
 array[ROLES] of int: role_counts_min = [floor(r / roles) | _ in ROLES];
+array[ROLES] of int: role_counts_max = [ceil(r / roles) | _ in ROLES];
 array[ASSIGNMENTS] of int: assignment_counts_min = [floor(n / (s * roles)) | _ in ASSIGNMENTS];
 array[ASSIGNMENTS] of int: assignment_counts_max = [ceil(n / (s * roles)) | _ in ASSIGNMENTS];
 set of PERSONS: non_leaders = PERSONS diff 1..(r * s);
@@ -94,10 +96,12 @@ predicate rules1 = (forall(round in ROUNDS) (
 predicate rules2 = (forall(person in PERSONS) (
     let {
         array[SCENES, ROLES] of var 0..ceil(r/card(ASSIGNMENTS)): temp = array2d(SCENES, ROLES, 
-            global_cardinality(row(person_assignments, person), ASSIGNMENTS))
+            global_cardinality(row(person_assignments, person), ASSIGNMENTS)),
+        array[SCENES] of var int: scene_sums = [sum(row(temp, scene)) | scene in SCENES],
+        array[ROLES] of var int: role_sums = [sum(col(temp, role)) | role in ROLES]
     } in
-    [sum(row(temp, scene)) | scene in SCENES] >= scene_counts_min /\ 
-    [sum(col(temp, role)) | role in ROLES] >= role_counts_min 
+    scene_sums >= scene_counts_min /\ scene_sums <= scene_counts_max /\
+    role_sums >= role_counts_min /\ role_sums <= role_counts_max
 ));
 
 % 3. Each person must be assigned to each (scene, role) at most once in a day.
