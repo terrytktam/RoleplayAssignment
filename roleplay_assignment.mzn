@@ -35,13 +35,13 @@ set of int: ALL_ASSIGNMENTS = 1..(r * s * roles);
 % Rule feature toggles
 array[Rules] of bool: active_constraints = [
   true, % UniqueAssignment (mandatory)
-  false, % EvenSceneRoleAssignment (mandatory)
+  true, % EvenSceneRoleAssignment (mandatory)
   n > r * s, % NoDuplicateAssignment (conditionally mandatory)
   true, % LeaderInProsecutionRole (mandatory)
   true, % EvenGroupCount (mandatory)
   true, % ExtraPersonRolePriority
-  true, % NonLeaderFirstRoundOrdering
-  true, % LeaderAssignment
+  n > r * s, % NonLeaderFirstRoundOrdering (conditionally mandatory)
+  n <= r * s, % LeaderAssignment (conditionally mandatory)
   true, % FirstRoundLeaderAssignment (mandatory)
 ];
 
@@ -92,7 +92,7 @@ predicate rules1 = (forall(round in ROUNDS) (
 % 2. Each person must be assigned to each scene/role evenly
 predicate rules2 = (forall(person in PERSONS) (
     let {
-        array[SCENES, ROLES] of var 0..1: temp = array2d(SCENES, ROLES, 
+        array[SCENES, ROLES] of var 0..s: temp = array2d(SCENES, ROLES, 
             global_cardinality(row(person_assignments, person), ASSIGNMENTS))
     } in
     [count(row(temp, scene), 1) | scene in SCENES] >= scene_counts_min /\ 
